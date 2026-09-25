@@ -1,0 +1,1899 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<title>Tourist Path Planner 1.2</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIINfQ3ynhYbDEep6d7pcGfiC5s23YFif5Y=" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.maptiler.com/maptiler-sdk-js/v4.0.2/maptiler-sdk.css">
+<style>
+:root,
+[data-theme="light"] {
+  --background: #f7f6f2;
+  --surface: #fbfbf9;
+  --surface-2: #efede7;
+  --border: #d7d3cb;
+  --text: #26231c;
+  --muted: #6d6a63;
+  --primary: #01696f;
+  --primary-soft: #d7ecea;
+  --route: #01696f;
+  --walking: #a12c7b;
+  --success: #437a22;
+  --warning: #a95e1e;
+  --error: #a12c7b;
+  --shadow: 0 16px 40px rgba(23, 20, 16, .09);
+}
+[data-theme="dark"] {
+  --background: #141412;
+  --surface: #1d1d1a;
+  --surface-2: #262520;
+  --border: #3a3833;
+  --text: #e3e0d8;
+  --muted: #a29e96;
+  --primary: #63afb7;
+  --primary-soft: #233b3e;
+  --route: #63afb7;
+  --walking: #db76b2;
+  --success: #7ab058;
+  --warning: #dc985a;
+  --error: #db76b2;
+  --shadow: 0 16px 40px rgba(0, 0, 0, .35);
+}
+* { box-sizing: border-box; }
+html, body { min-height: 100%; }
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: "DM Sans", sans-serif;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, var(--primary) 9%, transparent), transparent 28%),
+    radial-gradient(circle at right, color-mix(in srgb, var(--warning) 10%, transparent), transparent 24%),
+    var(--background);
+}
+button, input { font: inherit; }
+button { cursor: pointer; }
+button:focus-visible, input:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--primary) 35%, transparent);
+  outline-offset: 2px;
+}
+.app {
+  width: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: clamp(560px, calc((100vw - 72px) / 2), 924px) minmax(0, 1fr);
+  gap: 24px;
+}
+.panel {
+  min-width: 0;
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(14px);
+}
+.left {
+  padding: 24px;
+  align-self: start;
+}
+.right {
+  height: calc(100vh - 48px);
+  min-height: 610px;
+  padding: 16px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 16px;
+  position: sticky;
+  top: 24px;
+}
+.hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+h1 {
+  margin: 0 0 7px;
+  font: 700 clamp(1.8rem, 2vw, 2.3rem) "Manrope", sans-serif;
+  letter-spacing: -.04em;
+}
+.muted { color: var(--muted); }
+.intro { max-width: 620px; font-size: .94rem; line-height: 1.5; }
+.theme-button {
+  width: 46px;
+  height: 46px;
+  flex: 0 0 46px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--surface-2);
+}
+.section-card {
+  margin-top: 16px;
+  padding: 18px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--surface-2) 80%, transparent);
+}
+.section-heading {
+  margin: 0;
+  font: 700 1.06rem "Manrope", sans-serif;
+}
+.section-copy {
+  margin: 4px 0 14px;
+  color: var(--muted);
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.address-labels,
+.address-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(105px, .4fr) 154px;
+  gap: 10px;
+  align-items: center;
+}
+.address-labels {
+  padding: 0 4px 7px;
+  color: var(--muted);
+  font-size: .67rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.address-row + .address-row { margin-top: 9px; }
+.address-input-cell {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.route-include-checkbox {
+  width: 15px;
+  height: 15px;
+  margin: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+.address-input-wrap { min-width: 0; position: relative; }
+.address-number {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  transform: translateY(-50%);
+  border-radius: 50%;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: .72rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+.address-input {
+  width: 100%;
+  min-height: 44px;
+  padding: .68rem .75rem .68rem 42px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+}
+.short-name-input {
+  width: 100%;
+  min-height: 44px;
+  padding: .68rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+}
+.address-input.confirmed {
+  padding-right: 34px;
+  border-color: color-mix(in srgb, var(--success) 65%, var(--border));
+}
+.confirmed-tick {
+  position: absolute;
+  right: 11px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--success);
+  font-size: .9rem;
+  font-weight: 700;
+  pointer-events: none;
+}
+.row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.icon-button {
+  width: 34px;
+  height: 34px;
+  min-width: 34px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  background: var(--surface);
+  font-weight: 700;
+  line-height: 1;
+}
+.icon-button:hover { border-color: var(--primary); background: var(--primary-soft); }
+.drag-handle { cursor: grab; touch-action: none; }
+.drag-handle:active { cursor: grabbing; }
+.address-row.dragging { opacity: .45; }
+.address-row.drag-over {
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--primary-soft) 75%, transparent);
+  box-shadow: 0 0 0 5px color-mix(in srgb, var(--primary-soft) 75%, transparent);
+}
+.primary-button {
+  min-height: 44px;
+  padding: .78rem 1.1rem;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  color: white;
+  background: var(--primary);
+  font-weight: 700;
+}
+.primary-button:hover { filter: brightness(1.06); }
+.primary-button:disabled { cursor: wait; opacity: .65; }
+.compact-button {
+  min-height: 36px;
+  padding: .5rem .78rem;
+  border-radius: 999px;
+  font-size: .76rem;
+  font-weight: 700;
+}
+.secondary-button {
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--surface);
+}
+.secondary-button:hover { border-color: var(--primary); background: var(--primary-soft); }
+.summary-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.save-filename-field {
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 700;
+}
+.save-filename-input {
+  width: min(260px, 55vw);
+  min-height: 36px;
+  padding: .5rem .7rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+}
+.status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: .42rem .72rem;
+  border-radius: 999px;
+  color: var(--primary);
+  background: var(--primary-soft);
+  font-size: .78rem;
+  font-weight: 700;
+}
+.status.error {
+  color: var(--error);
+  background: color-mix(in srgb, var(--error) 13%, var(--surface));
+}
+.summary-shell {
+  overflow: auto;
+  border: 1px solid color-mix(in srgb, var(--text) 10%, transparent);
+  border-radius: 14px;
+  background: var(--surface);
+}
+.summary-table {
+  width: 100%;
+  min-width: 570px;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+.summary-table th,
+.summary-table td {
+  padding: .72rem .65rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--text) 8%, transparent);
+  text-align: left;
+  vertical-align: top;
+}
+.summary-table th {
+  color: var(--muted);
+  background: var(--surface-2);
+  font-size: .65rem;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.summary-table tr:last-child td { border-bottom: 0; }
+.leg-number {
+  width: 22px;
+  height: 22px;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: white;
+  background: var(--success);
+  font-size: .7rem;
+  font-weight: 700;
+}
+.empty-state {
+  min-height: 120px;
+  padding: 24px;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  text-align: center;
+  font-size: .86rem;
+  line-height: 1.5;
+}
+.legend-card {
+  padding: 15px 16px;
+  border: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+  border-radius: 18px;
+  background: var(--surface-2);
+}
+.eyebrow {
+  margin-bottom: 8px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.legend { display: flex; gap: 10px 14px; flex-wrap: wrap; }
+.legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--muted);
+  font-size: .82rem;
+}
+.route-dot {
+  width: 13px;
+  height: 13px;
+  display: inline-block;
+  border-radius: 50%;
+  background: var(--route);
+}
+.walking-line {
+  width: 24px;
+  height: 0;
+  display: inline-block;
+  border-top: 4px dotted var(--walking);
+}
+.legend-number {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, .9);
+  border-radius: 50%;
+  color: white;
+  background: var(--success);
+  font-size: .68rem;
+  font-style: normal;
+  font-weight: 700;
+}
+.legend-flag {
+  --flag: #f28c28;
+  width: 13px;
+  height: 17px;
+  position: relative;
+  display: inline-block;
+  border-left: 2px solid var(--muted);
+}
+.legend-flag::before {
+  content: "";
+  width: 11px;
+  height: 8px;
+  position: absolute;
+  left: 0;
+  top: 1px;
+  background: var(--flag);
+  clip-path: polygon(0 0, 100% 0, 78% 50%, 100% 100%, 0 100%);
+}
+.legend-note {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: .72rem;
+  line-height: 1.4;
+}
+.map-options {
+  margin-top: 12px;
+  padding-top: 12px;
+  display: grid;
+  gap: 9px;
+  border-top: 1px solid color-mix(in srgb, var(--text) 9%, transparent);
+}
+.route-toggles {
+  display: flex;
+  align-items: center;
+  gap: 10px 18px;
+  flex-wrap: wrap;
+}
+.route-toggle {
+  width: fit-content;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text);
+  font-size: .8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.route-toggle input {
+  width: 18px;
+  height: 18px;
+  min-height: auto;
+}
+.driving-toggle input {
+  accent-color: var(--route);
+}
+.walking-toggle input {
+  accent-color: var(--walking);
+}
+.map-key-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 7px;
+  align-items: center;
+}
+.map-key-button {
+  width: 100%;
+  min-height: 36px;
+  white-space: nowrap;
+}
+.map-option-button {
+  min-height: 36px;
+  padding: .48rem .68rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  background: var(--surface);
+  font-size: .72rem;
+  font-weight: 700;
+}
+.map-option-button:hover { border-color: var(--primary); background: var(--primary-soft); }
+.map-source-status {
+  color: var(--muted);
+  font-size: .7rem;
+}
+.map-key-status {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.leaflet-tooltip.short-name-label {
+  padding: 4px 8px;
+  border: 1px solid color-mix(in srgb, var(--text) 16%, transparent);
+  border-radius: 8px;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .17);
+  font: 700 12px/1.2 "DM Sans", sans-serif;
+}
+.leaflet-tooltip-right.short-name-label::before {
+  border-right-color: color-mix(in srgb, var(--surface) 94%, transparent);
+}
+#map-host { min-height: 0; position: relative; }
+#map-wrap { width: 100%; height: 100%; position: relative; }
+#map {
+  width: 100%;
+  height: 100%;
+  min-height: 480px;
+  border-radius: 18px;
+  background: #dfe8e5;
+}
+.map-max-button {
+  width: 42px;
+  height: 42px;
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  color: var(--text);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+#map-fullscreen-host {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 5000;
+  padding: 16px;
+  background: rgba(0, 0, 0, .45);
+  backdrop-filter: blur(4px);
+}
+#map-fullscreen-host.active { display: block; }
+#map-fullscreen-host #map-wrap { height: 100%; }
+#map-fullscreen-host #map { min-height: calc(100vh - 32px); height: calc(100vh - 32px); }
+body.map-fullscreen { overflow: hidden; }
+.journey-flag {
+  --flag: #f28c28;
+  width: 19px;
+  height: 25px;
+  position: relative;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, .35));
+}
+.journey-flag__pole {
+  width: 2px;
+  height: 22px;
+  position: absolute;
+  left: 2px;
+  top: 1px;
+  border-radius: 2px;
+  background: #4f4f4f;
+}
+.journey-flag__cloth {
+  width: 14px;
+  height: 10px;
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  display: grid;
+  place-items: center;
+  border-radius: 1px 0 0 1px;
+  color: white;
+  background: var(--flag);
+  clip-path: polygon(0 0, 100% 0, 78% 50%, 100% 100%, 0 100%);
+  font: 700 8px/1 "DM Sans", sans-serif;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .65);
+}
+.journey-flag__foot {
+  width: 7px;
+  height: 2px;
+  position: absolute;
+  left: 0;
+  bottom: 1px;
+  border-radius: 50%;
+  background: #4f4f4f;
+}
+.modal {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 6000;
+  padding: 20px;
+  background: rgba(0, 0, 0, .46);
+  backdrop-filter: blur(4px);
+}
+.modal.open { display: grid; place-items: center; }
+.modal-box {
+  width: min(690px, 96vw);
+  max-height: 84vh;
+  overflow: auto;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  color: var(--text);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+  margin-bottom: 14px;
+}
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.modal-title { margin: 3px 0 0; font: 700 1.35rem "Manrope", sans-serif; }
+.cancel-button {
+  min-height: 38px;
+  padding: .55rem .8rem;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--muted);
+  background: transparent;
+}
+.place-option {
+  width: 100%;
+  margin-top: 9px;
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text);
+  background: var(--surface-2);
+  text-align: left;
+}
+.place-option:hover { border-color: var(--primary); background: var(--primary-soft); }
+.place-option-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.candidate-letter,
+.candidate-marker {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 2px solid rgba(255, 255, 255, .94);
+  border-radius: 50%;
+  color: white;
+  background: var(--primary);
+  box-shadow: 0 3px 8px rgba(0, 0, 0, .24);
+  font: 700 13px/1 "DM Sans", sans-serif;
+}
+.place-option strong { display: block; margin-bottom: 2px; }
+.place-address { color: var(--muted); font-size: .76rem; line-height: 1.35; }
+.select-chip {
+  flex: 0 0 auto;
+  padding: .46rem .68rem;
+  border-radius: 999px;
+  color: white;
+  background: var(--primary);
+  font-size: .73rem;
+  font-weight: 700;
+}
+.candidate-map-box { width: min(860px, 96vw); }
+#candidate-map {
+  width: 100%;
+  height: min(58vh, 500px);
+  min-height: 330px;
+  border-radius: 16px;
+  background: #dfe8e5;
+}
+.candidate-map-help {
+  margin: 10px 2px 0;
+  color: var(--muted);
+  font-size: .76rem;
+}
+#candidate-map-modal { z-index: 6100; }
+@media (max-width: 1050px) {
+  .app { grid-template-columns: 1fr; }
+  .right { height: 70vh; min-height: 620px; position: static; }
+}
+@media (max-width: 620px) {
+  .app { padding: 12px; gap: 12px; }
+  .left, .right { padding: 14px; border-radius: 20px; }
+  .address-labels { display: none; }
+  .address-row { grid-template-columns: 1fr; gap: 7px; }
+  .row-actions { justify-content: flex-end; }
+  .section-card { padding: 14px; }
+  .right { height: 72vh; min-height: 560px; }
+  #map { min-height: 390px; }
+  .map-key-row { grid-template-columns: 1fr 1fr; }
+  .map-key-button { grid-column: 1 / -1; }
+  .modal-header { align-items: stretch; flex-direction: column; }
+  .modal-actions { justify-content: flex-start; }
+  #candidate-map { min-height: 280px; }
+}
+</style>
+</head>
+<body>
+<main class="app">
+  <section class="panel left">
+    <header class="hero">
+      <div>
+        <h1>Tourist Path Planner 1.2</h1>
+        <div class="intro muted">Build a sightseeing itinerary, compare driving and walking times, and see the driving route on the map.</div>
+      </div>
+      <button class="theme-button" id="theme-button" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
+    </header>
+
+    <section class="section-card" aria-labelledby="addresses-heading">
+      <h2 class="section-heading" id="addresses-heading">Addresses</h2>
+      <p class="section-copy">Type an address and press Enter, then select the correct place to confirm it.</p>
+      <div class="address-labels"><span>Address</span><span>Short name</span><span>Actions</span></div>
+      <div id="address-rows"></div>
+    </section>
+
+    <section class="section-card" aria-labelledby="summary-heading">
+      <h2 class="section-heading" id="summary-heading">Summary</h2>
+      <p class="section-copy">Each line of the itinerary connects one confirmed address to the next.</p>
+      <div class="summary-toolbar">
+        <button class="primary-button compact-button" id="generate-button" type="button">Generate summary</button>
+        <button class="compact-button secondary-button" id="save-route-button" type="button">Save route</button>
+        <button class="compact-button secondary-button" id="load-route-button" type="button">Load route</button>
+        <button class="compact-button secondary-button" id="export-csv-button" type="button">Export CSV</button>
+        <span class="status" id="status" role="status" aria-live="polite">Ready</span>
+      </div>
+      <label class="save-filename-field" for="save-filename">
+        <span>Save filename</span>
+        <input class="save-filename-input" id="save-filename" type="text" placeholder="path-planner-route…" autocomplete="off">
+      </label>
+      <div class="summary-shell" id="summary-output">
+        <div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>
+      </div>
+    </section>
+  </section>
+
+  <aside class="panel right">
+    <div class="legend-card">
+      <div class="eyebrow">Map legend</div>
+      <div class="legend">
+        <span><i class="route-dot"></i>Car route</span>
+        <span><i class="walking-line"></i>Walking route</span>
+        <span><i class="legend-number">#</i>Route number</span>
+        <span><i class="legend-flag" style="--flag:#2563eb"></i>Start</span>
+        <span><i class="legend-flag" style="--flag:#f28c28"></i>Intermediary stop</span>
+        <span><i class="legend-flag" style="--flag:#2e9d45"></i>Finish</span>
+      </div>
+      <div class="legend-note">Flags match the address numbers: the start is #1. Each route number identifies the leg departing from that numbered stop.</div>
+      <div class="map-options">
+        <div class="route-toggles">
+          <label class="route-toggle driving-toggle"><input id="plot-driving-route" type="checkbox" checked>Plot driving route</label>
+          <label class="route-toggle walking-toggle"><input id="plot-walking-route" type="checkbox">Plot walking route</label>
+        </div>
+        <div class="eyebrow" style="margin:2px 0 0">English map</div>
+        <div class="map-key-row">
+          <button class="map-option-button map-key-button" id="load-api-keys" type="button" aria-describedby="api-key-status">Load API key file</button>
+          <button class="map-option-button" id="use-english-map" type="button">Use English</button>
+          <button class="map-option-button" id="use-local-map" type="button">Use OSM labels</button>
+          <span class="map-key-status" id="api-key-status">No keys loaded · expected lines: Maptile: YOUR_KEY and ORS: YOUR_KEY</span>
+        </div>
+        <div class="map-source-status" id="map-source-status">OpenStreetMap · local labels</div>
+        <div class="map-source-status" id="routing-source-status">Routing: public OSRM/FOSSGIS demo services</div>
+      </div>
+    </div>
+    <div id="map-host">
+      <div id="map-wrap">
+        <button class="map-max-button" id="map-max-button" type="button" aria-label="Maximise map" title="Maximise map">⛶</button>
+        <div id="map" aria-label="Itinerary map"></div>
+      </div>
+    </div>
+  </aside>
+</main>
+
+<div id="map-fullscreen-host"></div>
+<input id="route-file-input" type="file" accept="application/json,.json" hidden>
+<input id="api-key-file-input" type="file" accept="text/plain,.txt" hidden>
+
+<div class="modal" id="place-modal" aria-hidden="true">
+  <div class="modal-box" role="dialog" aria-modal="true" aria-labelledby="place-modal-title">
+    <div class="modal-header">
+      <div>
+        <div class="eyebrow">Confirm address</div>
+        <h2 class="modal-title" id="place-modal-title">Select the correct place</h2>
+      </div>
+      <div class="modal-actions">
+        <button class="map-option-button" id="display-candidates-button" type="button">Display on minimap</button>
+        <button class="cancel-button" id="cancel-place-button" type="button">Cancel</button>
+      </div>
+    </div>
+    <div id="place-results"></div>
+  </div>
+</div>
+
+<div class="modal" id="candidate-map-modal" aria-hidden="true">
+  <div class="modal-box candidate-map-box" role="dialog" aria-modal="true" aria-labelledby="candidate-map-title">
+    <div class="modal-header">
+      <div>
+        <div class="eyebrow">Compare search results</div>
+        <h2 class="modal-title" id="candidate-map-title">Candidate locations</h2>
+      </div>
+      <button class="cancel-button" id="close-candidate-map-button" type="button">Close minimap</button>
+    </div>
+    <div id="candidate-map" aria-label="Map of candidate address locations"></div>
+    <p class="candidate-map-help">The letters match the choices in the address list. Select the correct letter after closing this map.</p>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
+<script src="https://cdn.maptiler.com/maptiler-sdk-js/v4.0.2/maptiler-sdk.umd.min.js"></script>
+<script src="https://cdn.maptiler.com/leaflet-maptilersdk/v4.1.0/leaflet-maptilersdk.umd.min.js"></script>
+<script>
+"use strict";
+
+const addressRowsElement = document.getElementById("address-rows");
+const summaryOutput = document.getElementById("summary-output");
+const generateButton = document.getElementById("generate-button");
+const statusElement = document.getElementById("status");
+const placeModal = document.getElementById("place-modal");
+const placeResults = document.getElementById("place-results");
+const candidateMapModal = document.getElementById("candidate-map-modal");
+
+const app = {
+  rows: [],
+  legs: [],
+  map: null,
+  basemapLayer: null,
+  basemapMode: "local",
+  routeLayer: null,
+  markerLayer: null,
+  candidateMap: null,
+  candidateBasemapLayer: null,
+  candidateMarkerLayer: null,
+  dragId: null,
+  pendingPicker: null,
+  isMapFullscreen: false,
+  isGenerating: false,
+  maptilerKey: "",
+  orsKey: ""
+};
+
+const geocodeCache = new Map();
+let geocodeQueue = Promise.resolve();
+let lastGeocodeRequestAt = 0;
+
+function uid() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+function copyPlace(place) {
+  if (!place) return null;
+  const lat = Number(place.lat);
+  const lon = Number(place.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return {
+    name: String(place.name || place.displayName || "Selected place"),
+    displayName: String(place.displayName || place.name || "Selected place"),
+    lat,
+    lon
+  };
+}
+
+function createRow(values = {}) {
+  return {
+    id: uid(),
+    address: String(values.address || ""),
+    shortName: String(values.shortName || ""),
+    resolved: copyPlace(values.resolved),
+    includeInRoute: values.includeInRoute !== false
+  };
+}
+
+function routingRows() {
+  return app.rows.filter(row => row.includeInRoute);
+}
+
+function escapeHtml(value = "") {
+  return String(value).replace(/[&<>"']/g, character => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#039;"
+  })[character]);
+}
+
+function itineraryStopName(row, place) {
+  return String(row?.shortName || "").trim()
+    || String(place?.name || place?.displayName || "Selected place");
+}
+
+function itineraryStopAddress(row, place) {
+  return String(row?.address || "").trim()
+    || String(place?.displayName || place?.name || "Selected place");
+}
+
+function setStatus(message, kind = "") {
+  statusElement.textContent = message;
+  statusElement.className = `status${kind ? ` ${kind}` : ""}`;
+}
+
+function invalidateItinerary(message = "Addresses changed") {
+  app.legs = [];
+  renderSummary();
+  renderMap();
+  setStatus(message);
+}
+
+function addRow(afterId = null, values = {}) {
+  const row = createRow(values);
+  if (!afterId) {
+    app.rows.push(row);
+  } else {
+    const index = app.rows.findIndex(item => item.id === afterId);
+    app.rows.splice(index < 0 ? app.rows.length : index + 1, 0, row);
+  }
+  renderRows();
+  invalidateItinerary("Address row added");
+  requestAnimationFrame(() => {
+    addressRowsElement.querySelector(`[data-id="${row.id}"][data-role="address"]`)?.focus();
+  });
+}
+
+function duplicateRow(id) {
+  const index = app.rows.findIndex(row => row.id === id);
+  if (index < 0) return;
+  app.rows.splice(index + 1, 0, createRow(app.rows[index]));
+  renderRows();
+  invalidateItinerary("Address row duplicated");
+}
+
+function removeRow(id) {
+  app.rows = app.rows.filter(row => row.id !== id);
+  renderRows();
+  invalidateItinerary("Address row removed");
+}
+
+function moveRow(dragId, targetId) {
+  if (!dragId || !targetId || dragId === targetId) return;
+  const fromIndex = app.rows.findIndex(row => row.id === dragId);
+  const toIndex = app.rows.findIndex(row => row.id === targetId);
+  if (fromIndex < 0 || toIndex < 0) return;
+  const [moved] = app.rows.splice(fromIndex, 1);
+  app.rows.splice(toIndex, 0, moved);
+  renderRows();
+  invalidateItinerary("Address order changed");
+}
+
+function renderRows() {
+  addressRowsElement.innerHTML = "";
+  let routeNumber = 0;
+  app.rows.forEach((row, index) => {
+    const stopNumber = row.includeInRoute ? ++routeNumber : null;
+    const rowElement = document.createElement("div");
+    rowElement.className = "address-row";
+    rowElement.dataset.rowId = row.id;
+    rowElement.innerHTML = `
+      <div class="address-input-cell">
+        <input
+          class="route-include-checkbox"
+          data-id="${row.id}"
+          data-role="route-include"
+          type="checkbox"
+          ${row.includeInRoute ? "checked" : ""}
+          title="Include this location when calculating directions"
+          aria-label="Include address row ${index + 1} when calculating directions">
+        <div class="address-input-wrap">
+          ${stopNumber === null ? "" : `<span class="address-number">${stopNumber}</span>`}
+          <input
+            class="address-input${row.resolved ? " confirmed" : ""}"
+            data-id="${row.id}"
+            data-role="address"
+            type="text"
+            value="${escapeHtml(row.address)}"
+            placeholder="Type an address and press Enter"
+            aria-label="Address ${index + 1}"
+            autocomplete="off">
+          ${row.resolved ? '<span class="confirmed-tick" title="Confirmed">✓</span>' : ""}
+        </div>
+      </div>
+      <input
+        class="short-name-input"
+        data-id="${row.id}"
+        data-role="short-name"
+        type="text"
+        value="${escapeHtml(row.shortName)}"
+        placeholder="Short name (optional)"
+        aria-label="Short name ${index + 1}"
+        autocomplete="off">
+      <div class="row-actions" aria-label="Actions for address ${index + 1}">
+        <button class="icon-button" data-action="add" data-id="${row.id}" type="button" title="Add new row after this one" aria-label="Add new row after address ${index + 1}">+</button>
+        <button class="icon-button" data-action="duplicate" data-id="${row.id}" type="button" title="Duplicate row" aria-label="Duplicate address ${index + 1}">2</button>
+        <button class="icon-button" data-action="delete" data-id="${row.id}" type="button" title="Delete row" aria-label="Delete address ${index + 1}">×</button>
+        <button class="icon-button drag-handle" data-action="drag" data-id="${row.id}" type="button" draggable="true" title="Drag to move row" aria-label="Move address ${index + 1}">☰</button>
+      </div>`;
+    addressRowsElement.appendChild(rowElement);
+  });
+  bindRowEvents();
+}
+
+function bindRowEvents() {
+  addressRowsElement.querySelectorAll('[data-role="route-include"]').forEach(input => {
+    input.addEventListener("change", event => {
+      const row = app.rows.find(item => item.id === event.currentTarget.dataset.id);
+      if (!row) return;
+      row.includeInRoute = event.currentTarget.checked;
+      renderRows();
+      invalidateItinerary("Routing locations changed");
+    });
+  });
+
+  addressRowsElement.querySelectorAll('[data-role="address"]').forEach(input => {
+    input.addEventListener("input", event => {
+      const row = app.rows.find(item => item.id === event.currentTarget.dataset.id);
+      if (!row) return;
+      row.address = event.currentTarget.value;
+      if (row.resolved && row.address !== row.resolved.displayName) {
+        row.resolved = null;
+        event.currentTarget.classList.remove("confirmed");
+        event.currentTarget.parentElement.querySelector(".confirmed-tick")?.remove();
+      }
+      if (app.legs.length) invalidateItinerary("Address changed");
+    });
+    input.addEventListener("keydown", event => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      confirmAddress(event.currentTarget.dataset.id).catch(error => setStatus(error.message || "Address search failed", "error"));
+    });
+  });
+
+  addressRowsElement.querySelectorAll('[data-role="short-name"]').forEach(input => {
+    input.addEventListener("input", event => {
+      const row = app.rows.find(item => item.id === event.currentTarget.dataset.id);
+      if (!row) return;
+      row.shortName = event.currentTarget.value;
+      renderMap({ fit: false });
+    });
+  });
+
+  addressRowsElement.querySelectorAll("[data-action]").forEach(button => {
+    button.addEventListener("click", event => {
+      const { action, id } = event.currentTarget.dataset;
+      if (action === "add") addRow(id);
+      if (action === "duplicate") duplicateRow(id);
+      if (action === "delete") removeRow(id);
+    });
+  });
+
+  addressRowsElement.querySelectorAll(".drag-handle").forEach(handle => {
+    handle.addEventListener("dragstart", event => {
+      app.dragId = event.currentTarget.dataset.id;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData("text/plain", app.dragId);
+      event.currentTarget.closest(".address-row")?.classList.add("dragging");
+    });
+    handle.addEventListener("dragend", () => {
+      app.dragId = null;
+      addressRowsElement.querySelectorAll(".address-row").forEach(row => row.classList.remove("dragging", "drag-over"));
+    });
+  });
+
+  addressRowsElement.querySelectorAll(".address-row").forEach(row => {
+    row.addEventListener("dragover", event => {
+      event.preventDefault();
+      row.classList.add("drag-over");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("drag-over"));
+    row.addEventListener("drop", event => {
+      event.preventDefault();
+      const sourceId = app.dragId || event.dataTransfer.getData("text/plain");
+      row.classList.remove("drag-over");
+      moveRow(sourceId, row.dataset.rowId);
+    });
+  });
+}
+
+async function fetchJson(url, options, label) {
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error(`${label} network error`);
+  }
+  if (!response.ok) throw new Error(`${label} failed (${response.status})`);
+  try {
+    return await response.json();
+  } catch (error) {
+    throw new Error(`${label} returned invalid data`);
+  }
+}
+
+function geocode(query) {
+  const cacheKey = query.trim().toLocaleLowerCase("en");
+  if (geocodeCache.has(cacheKey)) return geocodeCache.get(cacheKey);
+
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    limit: "6",
+    addressdetails: "1",
+    namedetails: "1",
+    "accept-language": "en",
+    q: query
+  });
+  const request = geocodeQueue.then(async () => {
+    const delay = Math.max(0, 1100 - (Date.now() - lastGeocodeRequestAt));
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    lastGeocodeRequestAt = Date.now();
+    return fetchJson(
+      `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+      { headers: { Accept: "application/json" } },
+      "Address search"
+    );
+  });
+  geocodeQueue = request.then(() => undefined, () => undefined);
+  geocodeCache.set(cacheKey, request);
+  request.catch(() => {
+    if (geocodeCache.get(cacheKey) === request) geocodeCache.delete(cacheKey);
+  });
+  return request;
+}
+
+function normalisePlace(result) {
+  const displayName = result.display_name || "";
+  const named = result.namedetails?.["name:en"]
+    || result.namedetails?.name
+    || result.name
+    || displayName.split(",")[0];
+  const fallback = [
+    result.address?.attraction,
+    result.address?.tourism,
+    result.address?.building,
+    result.address?.road,
+    result.address?.town,
+    result.address?.city
+  ].find(Boolean);
+  return {
+    name: named || fallback || displayName.split(",")[0] || "Selected place",
+    displayName,
+    lat: Number(result.lat),
+    lon: Number(result.lon)
+  };
+}
+
+async function confirmAddress(rowId) {
+  const row = app.rows.find(item => item.id === rowId);
+  if (!row || !row.address.trim()) {
+    setStatus("Type an address before searching", "error");
+    return null;
+  }
+  setStatus("Searching for places…");
+  const results = await geocode(row.address.trim());
+  if (!results.length) {
+    setStatus("No matching places found", "error");
+    return null;
+  }
+  return openPlacePicker(rowId, results.map(normalisePlace));
+}
+
+function openPlacePicker(rowId, results) {
+  if (app.pendingPicker?.resolve) app.pendingPicker.resolve(null);
+  placeResults.innerHTML = "";
+  results.forEach((place, index) => {
+    const letter = String.fromCharCode(65 + index);
+    const option = document.createElement("button");
+    option.className = "place-option";
+    option.type = "button";
+    option.setAttribute("aria-label", `${letter}: ${place.displayName}. Select this place`);
+    option.innerHTML = `
+      <span class="place-option-main">
+        <span class="candidate-letter" aria-hidden="true">${letter}</span>
+        <span>
+          <strong>${escapeHtml(place.name)}</strong>
+          <span class="place-address">${escapeHtml(place.displayName)}</span>
+        </span>
+      </span>
+      <span class="select-chip">Select</span>`;
+    option.addEventListener("click", () => choosePlace(place));
+    placeResults.appendChild(option);
+  });
+  placeModal.classList.add("open");
+  placeModal.setAttribute("aria-hidden", "false");
+  return new Promise(resolve => {
+    app.pendingPicker = { rowId, resolve, results };
+    requestAnimationFrame(() => placeResults.querySelector(".place-option")?.focus());
+  });
+}
+
+function candidateMarkerIcon(letter) {
+  return L.divIcon({
+    className: "",
+    html: `<div class="candidate-marker">${letter}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
+    popupAnchor: [0, -16]
+  });
+}
+
+function createCandidateBasemapLayer() {
+  const key = app.maptilerKey;
+  if (app.basemapMode === "english" && key && window.maptilersdk && L.maptiler?.maptilerLayer) {
+    return L.maptiler.maptilerLayer({
+      apiKey: key,
+      style: L.maptiler.MapStyle.STREETS,
+      language: maptilersdk.Language.ENGLISH
+    });
+  }
+  return L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  });
+}
+
+function openCandidateMap() {
+  const results = app.pendingPicker?.results || [];
+  if (!results.length) return;
+  closeCandidateMap({ restoreFocus: false });
+  candidateMapModal.classList.add("open");
+  candidateMapModal.setAttribute("aria-hidden", "false");
+  placeModal.setAttribute("aria-hidden", "true");
+  requestAnimationFrame(() => {
+    if (!candidateMapModal.classList.contains("open")) return;
+    app.candidateMap = L.map("candidate-map", { zoomControl: true });
+    app.candidateBasemapLayer = createCandidateBasemapLayer().addTo(app.candidateMap);
+    app.candidateMarkerLayer = L.layerGroup().addTo(app.candidateMap);
+    const bounds = [];
+    results.forEach((place, index) => {
+      if (!Number.isFinite(place.lat) || !Number.isFinite(place.lon)) return;
+      const letter = String.fromCharCode(65 + index);
+      const latLng = [place.lat, place.lon];
+      L.marker(latLng, {
+        icon: candidateMarkerIcon(letter),
+        zIndexOffset: 200 + index
+      })
+        .bindPopup(`<strong>${letter} · ${escapeHtml(place.name)}</strong><br><span style="font-size:.78rem">${escapeHtml(place.displayName)}</span>`)
+        .addTo(app.candidateMarkerLayer);
+      bounds.push(latLng);
+    });
+    if (bounds.length === 1) app.candidateMap.setView(bounds[0], 16);
+    else if (bounds.length) app.candidateMap.fitBounds(bounds, { padding: [42, 42], maxZoom: 16 });
+    else app.candidateMap.setView([54.5, -3], 5);
+    app.candidateMap.invalidateSize();
+    document.getElementById("close-candidate-map-button").focus();
+  });
+}
+
+function closeCandidateMap({ restoreFocus = true } = {}) {
+  candidateMapModal.classList.remove("open");
+  candidateMapModal.setAttribute("aria-hidden", "true");
+  if (placeModal.classList.contains("open")) placeModal.setAttribute("aria-hidden", "false");
+  if (app.candidateMap) app.candidateMap.remove();
+  app.candidateMap = null;
+  app.candidateBasemapLayer = null;
+  app.candidateMarkerLayer = null;
+  if (restoreFocus && placeModal.classList.contains("open")) {
+    document.getElementById("display-candidates-button").focus();
+  }
+}
+
+function choosePlace(place) {
+  const pending = app.pendingPicker;
+  const row = app.rows.find(item => item.id === pending?.rowId);
+  if (row) {
+    row.address = place.displayName;
+    row.resolved = place;
+  }
+  closePlacePicker(place);
+  renderRows();
+  renderMap();
+  setStatus(`Confirmed: ${place.name}`);
+}
+
+function closePlacePicker(result = null) {
+  const pending = app.pendingPicker;
+  closeCandidateMap({ restoreFocus: false });
+  app.pendingPicker = null;
+  placeModal.classList.remove("open");
+  placeModal.setAttribute("aria-hidden", "true");
+  pending?.resolve?.(result);
+}
+
+function formatMiles(miles) {
+  const rounded = Math.round(miles * 10) / 10;
+  return `${rounded.toFixed(rounded % 1 ? 1 : 0)} ${rounded === 1 ? "mile" : "miles"}`;
+}
+
+function formatOptionalMiles(miles) {
+  return Number.isFinite(miles) ? formatMiles(miles) : "—";
+}
+
+function formatDuration(minutes) {
+  const rounded = Math.max(1, Math.round(minutes));
+  if (rounded < 60) return `${rounded} ${rounded === 1 ? "min" : "mins"}`;
+  const hours = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  if (!remainder) return `${hours} ${hours === 1 ? "hr" : "hrs"}`;
+  return `${hours} ${hours === 1 ? "hr" : "hrs"} ${remainder} mins`;
+}
+
+async function getOpenRouteServiceRoute(profile, start, end, label) {
+  const data = await fetchJson(
+    `https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`,
+    {
+      method: "POST",
+      headers: {
+        Accept: "application/geo+json, application/json",
+        Authorization: app.orsKey,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        coordinates: [[start.lon, start.lat], [end.lon, end.lat]]
+      })
+    },
+    label
+  );
+  const feature = data.features?.[0];
+  const summary = feature?.properties?.summary;
+  if (!feature?.geometry || !summary) throw new Error(`No ${label.toLowerCase()} found`);
+  return {
+    miles: summary.distance / 1609.344,
+    minutes: summary.duration / 60,
+    geometry: feature.geometry
+  };
+}
+
+async function getDemoCarRoute(start, end) {
+  const coordinates = `${start.lon},${start.lat};${end.lon},${end.lat}`;
+  const data = await fetchJson(
+    `https://router.project-osrm.org/route/v1/driving/${coordinates}?overview=full&geometries=geojson`,
+    undefined,
+    "Car route"
+  );
+  const route = data.routes?.[0];
+  if (!route) throw new Error("No car route found");
+  return {
+    miles: route.distance / 1609.344,
+    minutes: route.duration / 60,
+    geometry: route.geometry
+  };
+}
+
+async function getDemoWalkingRoute(start, end) {
+  const coordinates = `${start.lon},${start.lat};${end.lon},${end.lat}`;
+  const data = await fetchJson(
+    `https://routing.openstreetmap.de/routed-foot/route/v1/driving/${coordinates}?overview=full&geometries=geojson&steps=false`,
+    undefined,
+    "Walking route"
+  );
+  const route = data.routes?.[0];
+  if (!route) throw new Error("No walking route found");
+  return {
+    miles: route.distance / 1609.344,
+    minutes: route.duration / 60,
+    geometry: route.geometry
+  };
+}
+
+function getCarRoute(start, end) {
+  return app.orsKey
+    ? getOpenRouteServiceRoute("driving-car", start, end, "Car route")
+    : getDemoCarRoute(start, end);
+}
+
+function getWalkingRoute(start, end) {
+  return app.orsKey
+    ? getOpenRouteServiceRoute("foot-walking", start, end, "Walking route")
+    : getDemoWalkingRoute(start, end);
+}
+
+async function generateSummary() {
+  if (app.isGenerating) return;
+  const routeRows = routingRows();
+  if (routeRows.length < 2) {
+    setStatus("Include at least two addresses", "error");
+    return;
+  }
+  if (routeRows.some(row => !row.address.trim())) {
+    setStatus("Complete every included address row", "error");
+    return;
+  }
+
+  app.isGenerating = true;
+  generateButton.disabled = true;
+  generateButton.textContent = "Generating…";
+  try {
+    for (let index = 0; index < routeRows.length; index += 1) {
+      const row = routeRows[index];
+      if (!row.resolved) {
+        setStatus(`Confirm address ${index + 1}`);
+        const selected = await confirmAddress(row.id);
+        if (!selected) throw new Error(`Address ${index + 1} was not confirmed`);
+      }
+    }
+
+    const legs = [];
+    for (let index = 0; index < routeRows.length - 1; index += 1) {
+      const from = routeRows[index].resolved;
+      const to = routeRows[index + 1].resolved;
+      setStatus(`Calculating leg ${index + 1} of ${routeRows.length - 1}…`);
+      const [car, walk] = await Promise.all([
+        getCarRoute(from, to),
+        getWalkingRoute(from, to)
+      ]);
+      legs.push({
+        number: index + 1,
+        from,
+        to,
+        miles: car.miles,
+        driveMinutes: car.minutes,
+        walkMiles: walk.miles,
+        walkMinutes: walk.minutes,
+        geometry: car.geometry,
+        walkGeometry: walk.geometry
+      });
+    }
+    app.legs = legs;
+    renderSummary();
+    renderMap();
+    const provider = app.orsKey ? "OpenRouteService" : "public demo routing";
+    setStatus(`Itinerary ready · ${legs.length} ${legs.length === 1 ? "leg" : "legs"} · ${provider}`);
+  } catch (error) {
+    setStatus(error.message || "Could not generate itinerary", "error");
+  } finally {
+    app.isGenerating = false;
+    generateButton.disabled = false;
+    generateButton.textContent = "Generate summary";
+  }
+}
+
+function renderSummary() {
+  if (!app.legs.length) {
+    summaryOutput.innerHTML = '<div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>';
+    return;
+  }
+  const routeRows = routingRows();
+  const rows = app.legs.map((leg, index) => `
+    <tr>
+      <td><span class="leg-number">${leg.number}</span></td>
+      <td><strong>${escapeHtml(itineraryStopName(routeRows[index], leg.from))}</strong></td>
+      <td><strong>${escapeHtml(itineraryStopName(routeRows[index + 1], leg.to))}</strong></td>
+      <td>${formatMiles(leg.miles)}</td>
+      <td>${formatDuration(leg.driveMinutes)}</td>
+      <td>${formatOptionalMiles(leg.walkMiles)}</td>
+      <td>${formatDuration(leg.walkMinutes)}</td>
+    </tr>`).join("");
+  summaryOutput.innerHTML = `
+    <table class="summary-table">
+      <thead>
+        <tr><th>Route</th><th>From</th><th>To</th><th>Distance (car)</th><th>Drive time</th><th>Distance (Walk)</th><th>Walk time</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+function normaliseGeometry(geometry) {
+  if (!geometry || geometry.type !== "LineString" || !Array.isArray(geometry.coordinates)) return null;
+  const coordinates = geometry.coordinates
+    .map(pair => Array.isArray(pair) ? [Number(pair[0]), Number(pair[1])] : null)
+    .filter(pair => pair && Number.isFinite(pair[0]) && Number.isFinite(pair[1]));
+  return coordinates.length >= 2 ? { type: "LineString", coordinates } : null;
+}
+
+function geometryDistanceMiles(geometry) {
+  if (!geometry?.coordinates?.length) return null;
+  const toRadians = degrees => degrees * Math.PI / 180;
+  let distance = 0;
+  for (let index = 1; index < geometry.coordinates.length; index += 1) {
+    const [previousLon, previousLat] = geometry.coordinates[index - 1];
+    const [currentLon, currentLat] = geometry.coordinates[index];
+    const latitudeDelta = toRadians(currentLat - previousLat);
+    const longitudeDelta = toRadians(currentLon - previousLon);
+    const previousLatitude = toRadians(previousLat);
+    const currentLatitude = toRadians(currentLat);
+    const haversine = Math.sin(latitudeDelta / 2) ** 2
+      + Math.cos(previousLatitude) * Math.cos(currentLatitude)
+      * Math.sin(longitudeDelta / 2) ** 2;
+    distance += 3958.7613 * 2 * Math.asin(Math.sqrt(haversine));
+  }
+  return distance;
+}
+
+function normaliseSavedLeg(leg, index) {
+  const from = copyPlace(leg?.from);
+  const to = copyPlace(leg?.to);
+  if (!from || !to) return null;
+  const miles = Number(leg.miles);
+  const driveMinutes = Number(leg.driveMinutes);
+  const walkGeometry = normaliseGeometry(leg.walkGeometry);
+  const walkMiles = leg.walkMiles == null ? NaN : Number(leg.walkMiles);
+  const walkMinutes = Number(leg.walkMinutes);
+  return {
+    number: index + 1,
+    from,
+    to,
+    miles: Number.isFinite(miles) ? miles : 0,
+    driveMinutes: Number.isFinite(driveMinutes) ? driveMinutes : 0,
+    walkMiles: Number.isFinite(walkMiles) ? walkMiles : geometryDistanceMiles(walkGeometry),
+    walkMinutes: Number.isFinite(walkMinutes) ? walkMinutes : 0,
+    geometry: normaliseGeometry(leg.geometry),
+    walkGeometry
+  };
+}
+
+function downloadBlob(blob, filename) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => {
+    URL.revokeObjectURL(link.href);
+    link.remove();
+  }, 0);
+}
+
+function filenameTimestamp() {
+  return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
+}
+
+function routeSaveFilename() {
+  const customName = document.getElementById("save-filename").value.trim();
+  if (!customName) return `path-planner-route-${filenameTimestamp()}.json`;
+  return /\.json$/i.test(customName) ? customName : `${customName}.json`;
+}
+
+function saveRoute() {
+  const saveEnglishMap = app.basemapMode === "english";
+  const payload = {
+    format: "path-planner-route",
+    version: 4,
+    savedAt: new Date().toISOString(),
+    settings: {
+      plotDriving: document.getElementById("plot-driving-route").checked,
+      plotWalking: document.getElementById("plot-walking-route").checked,
+      mapMode: saveEnglishMap ? "english" : "local"
+    },
+    rows: app.rows.map(row => ({
+      address: row.address,
+      shortName: row.shortName,
+      resolved: row.resolved
+    })),
+    legs: app.legs
+  };
+  downloadBlob(
+    new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }),
+    routeSaveFilename()
+  );
+  setStatus("Route saved");
+}
+
+function loadRouteFile(file) {
+  if (!file) return;
+  setStatus("Loading route…");
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || !Array.isArray(data.rows)) throw new Error("Invalid Path Planner route file");
+      document.getElementById("save-filename").value = file.name;
+      app.rows = data.rows.map(row => createRow(row));
+      if (!app.rows.length) app.rows = [createRow(), createRow()];
+      app.legs = Array.isArray(data.legs)
+        ? data.legs
+          .map((leg, index) => normaliseSavedLeg(leg, index))
+          .filter(Boolean)
+          .slice(0, Math.max(0, app.rows.length - 1))
+        : [];
+      document.getElementById("plot-driving-route").checked = data.settings?.plotDriving !== false;
+      document.getElementById("plot-walking-route").checked = Boolean(data.settings?.plotWalking);
+      const ignoredEmbeddedKey = typeof data.settings?.maptilerKey === "string"
+        && Boolean(data.settings.maptilerKey.trim());
+      renderRows();
+      renderSummary();
+      if (data.settings?.mapMode === "english" && app.maptilerKey) {
+        useEnglishMap();
+      } else {
+        useLocalMap({ announce: false });
+      }
+      renderMap();
+      if (ignoredEmbeddedKey) {
+        setStatus("Route loaded · embedded MapTiler key ignored for security");
+      } else if (data.settings?.mapMode === "english" && !app.maptilerKey) {
+        setStatus("Route loaded · load the API key file to restore the English map");
+      } else {
+        setStatus(`Route loaded · ${app.rows.length} ${app.rows.length === 1 ? "place" : "places"}`);
+      }
+    } catch (error) {
+      setStatus(error.message || "Could not load route", "error");
+    }
+  };
+  reader.onerror = () => setStatus("Could not read route file", "error");
+  reader.readAsText(file);
+}
+
+function csvCell(value) {
+  let text = String(value ?? "");
+  if (/^[=+\-@]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+}
+
+function exportCsv() {
+  if (!app.legs.length) {
+    setStatus("Generate or load a summary before exporting", "error");
+    return;
+  }
+  const routeRows = routingRows();
+  const rows = [
+    ["Route", "From", "From (address)", "To", "To (address)", "Distance (car)", "Drive time", "Distance (Walk)", "Walk time"],
+    ...app.legs.map((leg, index) => [
+      leg.number,
+      itineraryStopName(routeRows[index], leg.from),
+      itineraryStopAddress(routeRows[index], leg.from),
+      itineraryStopName(routeRows[index + 1], leg.to),
+      itineraryStopAddress(routeRows[index + 1], leg.to),
+      formatMiles(leg.miles),
+      formatDuration(leg.driveMinutes),
+      formatOptionalMiles(leg.walkMiles),
+      formatDuration(leg.walkMinutes)
+    ])
+  ];
+  const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+  downloadBlob(
+    new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+    `path-planner-summary-${filenameTimestamp()}.csv`
+  );
+  setStatus("CSV exported");
+}
+
+function routeNumberIcon(number) {
+  return L.divIcon({
+    className: "",
+    html: `<div style="width:30px;height:30px;border-radius:50%;background:#437a22;color:#fff;display:grid;place-items:center;font:700 14px 'DM Sans',sans-serif;border:2px solid rgba(255,255,255,.9);box-shadow:0 4px 10px rgba(0,0,0,.22)">${number}</div>`,
+    iconSize: [30, 30],
+    iconAnchor: [15, 15]
+  });
+}
+
+function journeyFlagIcon(colour, stopNumber, offsetIndex = 0) {
+  const offsetX = offsetIndex * 25;
+  return L.divIcon({
+    className: "",
+    html: `<div class="journey-flag" style="--flag:${colour}"><span class="journey-flag__pole"></span><span class="journey-flag__cloth">${stopNumber}</span><span class="journey-flag__foot"></span></div>`,
+    iconSize: [19, 25],
+    iconAnchor: [3 - offsetX, 24],
+    popupAnchor: [7 + offsetX, -22],
+    tooltipAnchor: [18 + offsetX, -14]
+  });
+}
+
+function renderMap({ fit = true } = {}) {
+  if (!app.map) return;
+  app.routeLayer.clearLayers();
+  app.markerLayer.clearLayers();
+  const bounds = [];
+  const plotDriving = document.getElementById("plot-driving-route")?.checked;
+  const plotWalking = document.getElementById("plot-walking-route")?.checked;
+
+  app.legs.forEach(leg => {
+    const coordinates = leg.geometry?.coordinates || [];
+    const latLngs = coordinates.map(([lon, lat]) => [lat, lon]);
+    if (plotDriving && latLngs.length) {
+      L.polyline(latLngs, {
+        color: getComputedStyle(document.documentElement).getPropertyValue("--route").trim() || "#01696f",
+        weight: 5,
+        opacity: .88
+      }).addTo(app.routeLayer);
+      const midpoint = latLngs[Math.floor(latLngs.length / 2)];
+      L.marker(midpoint, { icon: routeNumberIcon(leg.number), zIndexOffset: 100 })
+        .bindPopup(`<strong>Route ${leg.number}</strong><br>${escapeHtml(leg.from.name)} → ${escapeHtml(leg.to.name)}`)
+        .addTo(app.markerLayer);
+      bounds.push(...latLngs);
+    }
+    if (plotWalking) {
+      const walkingCoordinates = leg.walkGeometry?.coordinates || [];
+      if (walkingCoordinates.length) {
+        const walkingLatLngs = walkingCoordinates.map(([lon, lat]) => [lat, lon]);
+        L.polyline(walkingLatLngs, {
+          color: getComputedStyle(document.documentElement).getPropertyValue("--walking").trim() || "#a12c7b",
+          weight: 5,
+          opacity: .92,
+          dashArray: "2 10",
+          lineCap: "round"
+        }).addTo(app.routeLayer);
+        bounds.push(...walkingLatLngs);
+      }
+    }
+  });
+
+  const routeRows = routingRows();
+  let routeStopNumber = 0;
+  const confirmedRows = app.rows
+    .map((row, index) => ({
+      ...row,
+      index,
+      routeStopNumber: row.includeInRoute ? ++routeStopNumber : null
+    }))
+    .filter(row => row.resolved);
+  const coordinateCounts = new Map();
+  confirmedRows.forEach(row => {
+    const place = row.resolved;
+    const key = `${place.lat.toFixed(5)},${place.lon.toFixed(5)}`;
+    const offset = coordinateCounts.get(key) || 0;
+    coordinateCounts.set(key, offset + 1);
+    const latLng = [place.lat, place.lon];
+    const isRouted = row.routeStopNumber !== null;
+    let locationMarker;
+
+    if (isRouted) {
+      const isFirst = row.routeStopNumber === 1;
+      const isLast = row.routeStopNumber === routeRows.length;
+      const colour = isFirst ? "#2563eb" : isLast ? "#2e9d45" : "#f28c28";
+      const role = isFirst ? "Start" : isLast ? "Finish" : "Intermediary stop";
+      locationMarker = L.marker(latLng, {
+        icon: journeyFlagIcon(colour, row.routeStopNumber, offset),
+        zIndexOffset: 400 + offset
+      })
+        .bindPopup(`<strong>${role} · Stop ${row.routeStopNumber}</strong><br>${escapeHtml(place.name)}<br><span style="font-size:.78rem">${escapeHtml(place.displayName)}</span>`);
+    } else {
+      locationMarker = L.circleMarker(latLng, {
+        radius: 7,
+        color: "#ffffff",
+        weight: 2,
+        fillColor: "#6b7280",
+        fillOpacity: .95
+      })
+        .bindPopup(`<strong>Location not included in route</strong><br>${escapeHtml(place.name)}<br><span style="font-size:.78rem">${escapeHtml(place.displayName)}</span>`);
+    }
+
+    if (row.shortName.trim()) {
+      locationMarker.bindTooltip(escapeHtml(row.shortName.trim()), {
+        permanent: true,
+        direction: "right",
+        className: "short-name-label",
+        opacity: 1
+      });
+    }
+    locationMarker.addTo(app.markerLayer);
+    bounds.push(latLng);
+  });
+
+  if (fit && bounds.length) {
+    app.map.fitBounds(bounds, { padding: [42, 42], maxZoom: 15 });
+  }
+}
+
+function activateBasemap(layer, mode, statusText) {
+  if (app.basemapLayer) app.map.removeLayer(app.basemapLayer);
+  if (app.map.attributionControl) {
+    app.map.attributionControl.remove();
+    app.map.attributionControl = L.control.attribution().addTo(app.map);
+  }
+  app.basemapLayer = layer.addTo(app.map);
+  app.basemapMode = mode;
+  app.basemapLayer.bringToBack?.();
+  document.getElementById("map-source-status").textContent = statusText;
+}
+
+function useLocalMap({ announce = true } = {}) {
+  const layer = L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    maxZoom: 19,
+    attribution: "© OpenStreetMap contributors"
+  });
+  activateBasemap(layer, "local", "OpenStreetMap · local labels");
+  if (announce) setStatus("Local-language map active");
+}
+
+function useEnglishMap() {
+  const key = app.maptilerKey;
+  if (!key) {
+    setStatus("Load the API key file first", "error");
+    document.getElementById("load-api-keys").focus();
+    return;
+  }
+  if (!window.maptilersdk || !L.maptiler?.maptilerLayer) {
+    setStatus("MapTiler could not be loaded", "error");
+    return;
+  }
+  try {
+    const layer = L.maptiler.maptilerLayer({
+      apiKey: key,
+      style: L.maptiler.MapStyle.STREETS,
+      language: maptilersdk.Language.ENGLISH
+    });
+    layer.on?.("error", () => {
+      if (app.basemapLayer !== layer) return;
+      document.getElementById("map-source-status").textContent = "MapTiler error · check API key";
+    });
+    activateBasemap(layer, "english", "MapTiler Streets · English labels");
+    setStatus("English map active");
+  } catch (error) {
+    setStatus("Could not start the English map", "error");
+  }
+}
+
+async function loadApiKeyFile(file) {
+  if (!file) return;
+  if (file.size > 16384) {
+    setStatus("API key file is too large", "error");
+    return;
+  }
+  try {
+    const contents = (await file.text()).replace(/^\uFEFF/, "").trim();
+    const match = /^Maptile: ([A-Za-z0-9._-]{8,512})\r?\nORS: ([A-Za-z0-9._-]{8,1024})$/.exec(contents);
+    if (!match) throw new Error("Key file must contain exactly two lines: Maptile: YOUR_KEY and ORS: YOUR_KEY");
+    app.maptilerKey = match[1];
+    app.orsKey = match[2];
+    document.getElementById("api-key-status").textContent = `MapTiler + ORS keys loaded from ${file.name} · memory only`;
+    document.getElementById("routing-source-status").textContent = "Routing: OpenRouteService · HeiGIT";
+    setStatus("MapTiler and OpenRouteService keys loaded securely");
+  } catch (error) {
+    app.maptilerKey = "";
+    app.orsKey = "";
+    document.getElementById("api-key-status").textContent = "No keys loaded · expected lines: Maptile: YOUR_KEY and ORS: YOUR_KEY";
+    document.getElementById("routing-source-status").textContent = "Routing: public OSRM/FOSSGIS demo services";
+    setStatus(error.message || "Could not read API key file", "error");
+  }
+}
+
+function initMap() {
+  app.map = L.map("map", { zoomControl: true }).setView([54.5, -3], 6);
+  useLocalMap({ announce: false });
+  app.routeLayer = L.layerGroup().addTo(app.map);
+  app.markerLayer = L.layerGroup().addTo(app.map);
+}
+
+function toggleMapFullscreen() {
+  const normalHost = document.getElementById("map-host");
+  const fullscreenHost = document.getElementById("map-fullscreen-host");
+  const mapWrap = document.getElementById("map-wrap");
+  app.isMapFullscreen = !app.isMapFullscreen;
+  document.body.classList.toggle("map-fullscreen", app.isMapFullscreen);
+  fullscreenHost.classList.toggle("active", app.isMapFullscreen);
+  fullscreenHost.setAttribute("aria-hidden", String(!app.isMapFullscreen));
+  (app.isMapFullscreen ? fullscreenHost : normalHost).appendChild(mapWrap);
+  const mapButton = document.getElementById("map-max-button");
+  const mapButtonLabel = app.isMapFullscreen ? "Close full-screen map" : "Maximise map";
+  mapButton.textContent = app.isMapFullscreen ? "✕" : "⛶";
+  mapButton.title = mapButtonLabel;
+  mapButton.setAttribute("aria-label", mapButtonLabel);
+  setTimeout(() => app.map.invalidateSize(), 60);
+}
+
+document.getElementById("theme-button").addEventListener("click", () => {
+  const root = document.documentElement;
+  root.dataset.theme = root.dataset.theme === "dark" ? "light" : "dark";
+  renderMap();
+});
+document.getElementById("display-candidates-button").addEventListener("click", openCandidateMap);
+document.getElementById("cancel-place-button").addEventListener("click", () => closePlacePicker());
+document.getElementById("close-candidate-map-button").addEventListener("click", () => closeCandidateMap());
+placeModal.addEventListener("click", event => {
+  if (event.target === placeModal) closePlacePicker();
+});
+candidateMapModal.addEventListener("click", event => {
+  if (event.target === candidateMapModal) closeCandidateMap();
+});
+document.addEventListener("keydown", event => {
+  if (event.key === "Escape" && candidateMapModal.classList.contains("open")) closeCandidateMap();
+  else if (event.key === "Escape" && placeModal.classList.contains("open")) closePlacePicker();
+  else if (event.key === "Escape" && app.isMapFullscreen) toggleMapFullscreen();
+});
+document.getElementById("map-max-button").addEventListener("click", toggleMapFullscreen);
+document.getElementById("plot-driving-route").addEventListener("change", () => renderMap({ fit: false }));
+document.getElementById("plot-walking-route").addEventListener("change", () => renderMap({ fit: false }));
+document.getElementById("use-english-map").addEventListener("click", useEnglishMap);
+document.getElementById("use-local-map").addEventListener("click", () => useLocalMap());
+document.getElementById("load-api-keys").addEventListener("click", () => {
+  document.getElementById("api-key-file-input").click();
+});
+document.getElementById("api-key-file-input").addEventListener("change", event => {
+  loadApiKeyFile(event.target.files?.[0]);
+  event.target.value = "";
+});
+document.getElementById("save-route-button").addEventListener("click", saveRoute);
+document.getElementById("load-route-button").addEventListener("click", () => document.getElementById("route-file-input").click());
+document.getElementById("route-file-input").addEventListener("change", event => {
+  loadRouteFile(event.target.files?.[0]);
+  event.target.value = "";
+});
+document.getElementById("export-csv-button").addEventListener("click", exportCsv);
+generateButton.addEventListener("click", generateSummary);
+
+app.rows = [createRow(), createRow()];
+renderRows();
+renderSummary();
+initMap();
+</script>
+</body>
+</html>
