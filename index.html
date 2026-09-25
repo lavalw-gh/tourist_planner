@@ -1810,7 +1810,7 @@ async function loadApiKeyFile(file) {
   }
   try {
     const contents = (await file.text()).replace(/^\uFEFF/, "").trim();
-    const match = /^Maptile: ([A-Za-z0-9._-]{8,512})\r?\nORS: ([A-Za-z0-9._-]{8,1024})$/.exec(contents);
+    const match = /^Maptile: ([!-~]{8,512})\r?\nORS: ([!-~]{8,1024})$/.exec(contents);
     if (!match) throw new Error("Key file must contain exactly two lines: Maptile: YOUR_KEY and ORS: YOUR_KEY");
     app.maptilerKey = match[1];
     app.orsKey = match[2];
