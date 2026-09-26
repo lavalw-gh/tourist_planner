@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Tourist Path Planner 1.4</title>
+<title>Tourist Path Planner 1.5</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
@@ -270,10 +270,16 @@ h1 {
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
+.save-filename-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
 .save-filename-field {
   width: fit-content;
   max-width: 100%;
-  margin-bottom: 14px;
   display: flex;
   align-items: center;
   gap: 9px;
@@ -730,7 +736,7 @@ body.map-fullscreen { overflow: hidden; }
   <section class="panel left">
     <header class="hero">
       <div>
-        <h1>Tourist Path Planner 1.4</h1>
+        <h1>Tourist Path Planner 1.5</h1>
         <div class="intro muted">Build a sightseeing itinerary, compare driving and walking times, and see the driving route on the map.</div>
       </div>
       <button class="theme-button" id="theme-button" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
@@ -751,12 +757,15 @@ body.map-fullscreen { overflow: hidden; }
         <button class="compact-button secondary-button" id="save-route-button" type="button">Save route</button>
         <button class="compact-button secondary-button" id="load-route-button" type="button">Load route</button>
         <button class="compact-button secondary-button" id="export-csv-button" type="button">Export CSV</button>
+        <button class="compact-button secondary-button" id="export-google-maps-button" type="button">Export GoogleMaps</button>
+      </div>
+      <div class="save-filename-row">
+        <label class="save-filename-field" for="save-filename">
+          <span>Save filename</span>
+          <input class="save-filename-input" id="save-filename" type="text" placeholder="path-planner-route…" autocomplete="off">
+        </label>
         <span class="status" id="status" role="status" aria-live="polite">Ready</span>
       </div>
-      <label class="save-filename-field" for="save-filename">
-        <span>Save filename</span>
-        <input class="save-filename-input" id="save-filename" type="text" placeholder="path-planner-route…" autocomplete="off">
-      </label>
       <div class="summary-shell" id="summary-output">
         <div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>
       </div>
@@ -840,6 +849,11 @@ body.map-fullscreen { overflow: hidden; }
 <script>
 "use strict";
 
+// Version 1.5 changes:
+// - CSV exports use the Save filename value when present.
+// - Added an address-only Google Maps CSV export with city and postcode metadata.
+// - Moved status messages beside the Save filename field.
+//
 // Version 1.4 changes:
 // - Right-click at street level to reverse-geocode and add a confirmed route stop.
 // - Show a metric and imperial distance scale on the main map.
@@ -880,6 +894,15 @@ function uid() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function normaliseAddressParts(source = {}) {
+  return {
+    houseNumber: String(source.houseNumber || source.house_number || ""),
+    road: String(source.road || source.pedestrian || source.footway || source.path || source.square || ""),
+    city: String(source.city || source.town || source.village || source.municipality || source.hamlet || ""),
+    postcode: String(source.postcode || source.postal_code || "")
+  };
+}
+
 function copyPlace(place) {
   if (!place) return null;
   const lat = Number(place.lat);
@@ -889,7 +912,8 @@ function copyPlace(place) {
     name: String(place.name || place.displayName || "Selected place"),
     displayName: String(place.displayName || place.name || "Selected place"),
     lat,
-    lon
+    lon,
+    addressParts: normaliseAddressParts(place.addressParts)
   };
 }
 
@@ -1170,7 +1194,8 @@ function normalisePlace(result) {
     name: named || fallback || displayName.split(",")[0] || "Selected place",
     displayName,
     lat: Number(result.lat),
-    lon: Number(result.lon)
+    lon: Number(result.lon),
+    addressParts: normaliseAddressParts(result.address)
   };
 }
 
@@ -1650,6 +1675,31 @@ function filenameTimestamp() {
   return new Date().toISOString().slice(0, 19).replace(/[T:]/g, "-");
 }
 
+function compactFilenameDate() {
+  const now = new Date();
+  const year = String(now.getFullYear()).slice(-2);
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function saveFilenameBase() {
+  const customName = document.getElementById("save-filename").value.trim();
+  if (!customName) return "";
+  const filenameOnly = customName.split(/[\\/]/).at(-1).trim();
+  return filenameOnly.replace(/\.[^.]+$/, "").trim();
+}
+
+function summaryCsvFilename() {
+  const customBase = saveFilenameBase();
+  return customBase ? `${customBase}.csv` : `path-planner-summary-${filenameTimestamp()}.csv`;
+}
+
+function googleMapsCsvFilename() {
+  const customBase = saveFilenameBase();
+  return customBase ? `${customBase}_gmap.csv` : `gmaps_${compactFilenameDate()}.csv`;
+}
+
 function routeSaveFilename() {
   const customName = document.getElementById("save-filename").value.trim();
   if (!customName) return `path-planner-route-${filenameTimestamp()}.json`;
@@ -1754,9 +1804,45 @@ function exportCsv() {
   const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
   downloadBlob(
     new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
-    `path-planner-summary-${filenameTimestamp()}.csv`
+    summaryCsvFilename()
   );
   setStatus("CSV exported");
+}
+
+function googleMapsName(row) {
+  return row.shortName.trim()
+    || String(row.resolved?.name || "").trim()
+    || row.address.split(",")[0].trim();
+}
+
+function googleMapsStreetAddress(row) {
+  const parts = row.resolved?.addressParts;
+  const structuredStreet = [parts?.houseNumber, parts?.road].filter(Boolean).join(" ").trim();
+  return structuredStreet || row.address.trim();
+}
+
+function exportGoogleMapsCsv() {
+  // Export every nonblank address, independently of its route checkbox state.
+  const addressRows = app.rows.filter(row => row.address.trim());
+  if (!addressRows.length) {
+    setStatus("Add at least one address before exporting to Google Maps", "error");
+    return;
+  }
+  const rows = [
+    ["Name", "Street Address", "City", "ZIP Code"],
+    ...addressRows.map(row => [
+      googleMapsName(row),
+      googleMapsStreetAddress(row),
+      row.resolved?.addressParts?.city || "",
+      row.resolved?.addressParts?.postcode || ""
+    ])
+  ];
+  const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
+  downloadBlob(
+    new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }),
+    googleMapsCsvFilename()
+  );
+  setStatus(`Google Maps CSV exported · ${addressRows.length} ${addressRows.length === 1 ? "address" : "addresses"}`);
 }
 
 function routeMidpoint(geometry) {
@@ -2067,6 +2153,7 @@ document.getElementById("route-file-input").addEventListener("change", event => 
   event.target.value = "";
 });
 document.getElementById("export-csv-button").addEventListener("click", exportCsv);
+document.getElementById("export-google-maps-button").addEventListener("click", exportGoogleMapsCsv);
 generateButton.addEventListener("click", generateSummary);
 
 app.rows = [createRow(), createRow()];
