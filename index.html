@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Tourist Path Planner 1.3</title>
+<title>Tourist Path Planner 1.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
@@ -730,7 +730,7 @@ body.map-fullscreen { overflow: hidden; }
   <section class="panel left">
     <header class="hero">
       <div>
-        <h1>Tourist Path Planner 1.3</h1>
+        <h1>Tourist Path Planner 1.4</h1>
         <div class="intro muted">Build a sightseeing itinerary, compare driving and walking times, and see the driving route on the map.</div>
       </div>
       <button class="theme-button" id="theme-button" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
@@ -788,6 +788,7 @@ body.map-fullscreen { overflow: hidden; }
         <span class="map-key-status" id="api-key-status">No keys loaded · expected lines: Maptile: YOUR_KEY and ORS: YOUR_KEY</span>
         <div class="map-source-status" id="map-source-status">OpenStreetMap · local labels</div>
         <div class="map-source-status" id="routing-source-status">Routing: public OSRM/FOSSGIS demo services</div>
+        <div class="map-source-status">Right-click the map at street level (zoom 16+) to add a stop</div>
       </div>
     </div>
     <div id="map-host">
@@ -839,6 +840,10 @@ body.map-fullscreen { overflow: hidden; }
 <script>
 "use strict";
 
+// Version 1.4 changes:
+// - Right-click at street level to reverse-geocode and add a confirmed route stop.
+// - Show a metric and imperial distance scale on the main map.
+
 const addressRowsElement = document.getElementById("address-rows");
 const summaryOutput = document.getElementById("summary-output");
 const generateButton = document.getElementById("generate-button");
@@ -869,6 +874,7 @@ const app = {
 const geocodeCache = new Map();
 let geocodeQueue = Promise.resolve();
 let lastGeocodeRequestAt = 0;
+const STREET_LEVEL_ZOOM = 16;
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -1166,6 +1172,107 @@ function normalisePlace(result) {
     lat: Number(result.lat),
     lon: Number(result.lon)
   };
+}
+
+function reverseGeocode(lat, lon) {
+  // Share Nominatim's throttled request queue with typed address searches.
+  const params = new URLSearchParams({
+    format: "jsonv2",
+    addressdetails: "1",
+    namedetails: "1",
+    "accept-language": "en",
+    lat: String(lat),
+    lon: String(lon),
+    zoom: "18"
+  });
+  const request = geocodeQueue.then(async () => {
+    const delay = Math.max(0, 1100 - (Date.now() - lastGeocodeRequestAt));
+    if (delay) await new Promise(resolve => setTimeout(resolve, delay));
+    lastGeocodeRequestAt = Date.now();
+    return fetchJson(
+      `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+      { headers: { Accept: "application/json" } },
+      "Location lookup"
+    );
+  });
+  geocodeQueue = request.then(() => undefined, () => undefined);
+  return request;
+}
+
+function coordinateText(lat, lon) {
+  return `${lat.toFixed(6)}, ${lon.toFixed(6)}`;
+}
+
+function normaliseReversePlace(result) {
+  const place = normalisePlace(result);
+  // Prefer a mapped venue or street name to a bare house number from display_name.
+  const availableName = result.namedetails?.["name:en"]
+    || result.namedetails?.name
+    || result.name
+    || result.address?.attraction
+    || result.address?.tourism
+    || result.address?.amenity
+    || result.address?.building
+    || result.address?.house_name
+    || result.address?.shop
+    || result.address?.road;
+  if (availableName) place.name = String(availableName);
+  return place;
+}
+
+function addConfirmedMapStop(place) {
+  // Reuse an untouched starter row before appending another address row.
+  let row = app.rows.find(item => !item.address.trim() && !item.shortName.trim() && !item.resolved);
+  if (!row) {
+    row = createRow();
+    app.rows.push(row);
+  }
+  row.address = place.displayName;
+  row.resolved = place;
+  row.includeInRoute = true;
+  app.legs = [];
+  renderRows();
+  renderSummary();
+  renderMap({ fit: false });
+  setStatus(`Added map stop: ${place.name}`);
+}
+
+async function addStopFromMap(event) {
+  event.originalEvent?.preventDefault();
+  if (app.map.getZoom() < STREET_LEVEL_ZOOM) {
+    setStatus(`Zoom in to street level (${STREET_LEVEL_ZOOM}+) before adding a stop`, "error");
+    return;
+  }
+
+  const lat = Number(event.latlng.lat);
+  const lon = Number(event.latlng.lng);
+  const coordinates = coordinateText(lat, lon);
+  setStatus("Looking up the selected map location…");
+
+  let result = null;
+  try {
+    result = await reverseGeocode(lat, lon);
+  } catch (error) {
+    setStatus(error.message || "Could not look up the selected location", "error");
+  }
+
+  if (result?.display_name) {
+    addConfirmedMapStop(normaliseReversePlace(result));
+    return;
+  }
+
+  // Keep coordinate-only stops explicit and user-approved when no name is available.
+  const useCoordinates = window.confirm(`No name found for this location. Use coordinates ${coordinates} instead?`);
+  if (!useCoordinates) {
+    setStatus("Map stop not added");
+    return;
+  }
+  addConfirmedMapStop({
+    name: coordinates,
+    displayName: coordinates,
+    lat,
+    lon
+  });
 }
 
 async function confirmAddress(rowId) {
@@ -1895,9 +2002,14 @@ async function loadApiKeyFile(file) {
 function initMap() {
   app.map = L.map("map", { zoomControl: true }).setView([54.5, -3], 6);
   useLocalMap({ announce: false });
+  // Version 1.4: keep both units visible for international visitors.
+  L.control.scale({ position: "bottomleft", metric: true, imperial: true, maxWidth: 140 }).addTo(app.map);
   app.routeLayer = L.layerGroup().addTo(app.map);
   app.markerLayer = L.layerGroup().addTo(app.map);
   app.map.on("zoomend", () => renderMap({ fit: false }));
+  app.map.on("contextmenu", event => {
+    addStopFromMap(event).catch(error => setStatus(error.message || "Could not add the map stop", "error"));
+  });
 }
 
 function toggleMapFullscreen() {
