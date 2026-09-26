@@ -853,6 +853,7 @@ body.map-fullscreen { overflow: hidden; }
 // - CSV exports use the Save filename value when present.
 // - Added an address-only Google Maps CSV export with city and postcode metadata.
 // - Moved status messages beside the Save filename field.
+// - Routing fix: car and walking results are independent, so one unavailable mode no longer discards the other.
 //
 // Version 1.4 changes:
 // - Right-click at street level to reverse-geocode and add a confirmed route stop.
@@ -1455,9 +1456,13 @@ function formatDuration(minutes) {
   return `${hours} ${hours === 1 ? "hr" : "hrs"} ${remainder} mins`;
 }
 
+function formatOptionalDuration(minutes) {
+  return Number.isFinite(minutes) ? formatDuration(minutes) : "—";
+}
+
 async function getOpenRouteServiceRoute(profile, start, end, label) {
   const data = await fetchJson(
-    `https://api.heigit.org/openrouteservice/v2/directions/${profile}/geojson`,
+    `https://api.openrouteservice.org/v2/directions/${profile}/geojson`,
     {
       method: "POST",
       headers: {
@@ -1551,14 +1556,29 @@ async function generateSummary() {
     }
 
     const legs = [];
+    const routeWarnings = [];
     for (let index = 0; index < routeRows.length - 1; index += 1) {
       const from = routeRows[index].resolved;
       const to = routeRows[index + 1].resolved;
       setStatus(`Calculating leg ${index + 1} of ${routeRows.length - 1}…`);
-      const [car, walk] = await Promise.all([
+      // Do not discard a valid walking route just because the car profile cannot route the same points.
+      const [carResult, walkResult] = await Promise.allSettled([
         getCarRoute(from, to),
         getWalkingRoute(from, to)
       ]);
+      if (carResult.status === "rejected" && walkResult.status === "rejected") {
+        const carError = carResult.reason?.message || "Car route failed";
+        const walkError = walkResult.reason?.message || "Walking route failed";
+        throw new Error(`Leg ${index + 1} failed · ${carError} · ${walkError}`);
+      }
+      if (carResult.status === "rejected") routeWarnings.push(`leg ${index + 1}: car route unavailable`);
+      if (walkResult.status === "rejected") routeWarnings.push(`leg ${index + 1}: walking route unavailable`);
+      const car = carResult.status === "fulfilled"
+        ? carResult.value
+        : { miles: NaN, minutes: NaN, geometry: null };
+      const walk = walkResult.status === "fulfilled"
+        ? walkResult.value
+        : { miles: NaN, minutes: NaN, geometry: null };
       legs.push({
         number: index + 1,
         from,
@@ -1575,7 +1595,8 @@ async function generateSummary() {
     renderSummary();
     renderMap();
     const provider = app.orsKey ? "OpenRouteService" : "public demo routing";
-    setStatus(`Itinerary ready · ${legs.length} ${legs.length === 1 ? "leg" : "legs"} · ${provider}`);
+    const warningText = routeWarnings.length ? ` · ${routeWarnings.join("; ")}` : "";
+    setStatus(`Itinerary ready · ${legs.length} ${legs.length === 1 ? "leg" : "legs"} · ${provider}${warningText}`);
   } catch (error) {
     setStatus(error.message || "Could not generate itinerary", "error");
   } finally {
@@ -1596,10 +1617,10 @@ function renderSummary() {
       <td><span class="leg-number">${leg.number}</span></td>
       <td><strong>${escapeHtml(itineraryStopName(routeRows[index], leg.from))}</strong></td>
       <td><strong>${escapeHtml(itineraryStopName(routeRows[index + 1], leg.to))}</strong></td>
-      <td>${formatMiles(leg.miles)}</td>
-      <td>${formatDuration(leg.driveMinutes)}</td>
+      <td>${formatOptionalMiles(leg.miles)}</td>
+      <td>${formatOptionalDuration(leg.driveMinutes)}</td>
       <td>${formatOptionalMiles(leg.walkMiles)}</td>
-      <td>${formatDuration(leg.walkMinutes)}</td>
+      <td>${formatOptionalDuration(leg.walkMinutes)}</td>
     </tr>`).join("");
   summaryOutput.innerHTML = `
     <table class="summary-table">
@@ -1641,19 +1662,19 @@ function normaliseSavedLeg(leg, index) {
   const from = copyPlace(leg?.from);
   const to = copyPlace(leg?.to);
   if (!from || !to) return null;
-  const miles = Number(leg.miles);
-  const driveMinutes = Number(leg.driveMinutes);
+  const miles = leg.miles == null ? NaN : Number(leg.miles);
+  const driveMinutes = leg.driveMinutes == null ? NaN : Number(leg.driveMinutes);
   const walkGeometry = normaliseGeometry(leg.walkGeometry);
   const walkMiles = leg.walkMiles == null ? NaN : Number(leg.walkMiles);
-  const walkMinutes = Number(leg.walkMinutes);
+  const walkMinutes = leg.walkMinutes == null ? NaN : Number(leg.walkMinutes);
   return {
     number: index + 1,
     from,
     to,
-    miles: Number.isFinite(miles) ? miles : 0,
-    driveMinutes: Number.isFinite(driveMinutes) ? driveMinutes : 0,
+    miles: Number.isFinite(miles) ? miles : NaN,
+    driveMinutes: Number.isFinite(driveMinutes) ? driveMinutes : NaN,
     walkMiles: Number.isFinite(walkMiles) ? walkMiles : geometryDistanceMiles(walkGeometry),
-    walkMinutes: Number.isFinite(walkMinutes) ? walkMinutes : 0,
+    walkMinutes: Number.isFinite(walkMinutes) ? walkMinutes : NaN,
     geometry: normaliseGeometry(leg.geometry),
     walkGeometry
   };
@@ -1795,10 +1816,10 @@ function exportCsv() {
       itineraryStopAddress(routeRows[index], leg.from),
       itineraryStopName(routeRows[index + 1], leg.to),
       itineraryStopAddress(routeRows[index + 1], leg.to),
-      formatMiles(leg.miles),
-      formatDuration(leg.driveMinutes),
+      formatOptionalMiles(leg.miles),
+      formatOptionalDuration(leg.driveMinutes),
       formatOptionalMiles(leg.walkMiles),
-      formatDuration(leg.walkMinutes)
+      formatOptionalDuration(leg.walkMinutes)
     ])
   ];
   const csv = rows.map(row => row.map(csvCell).join(",")).join("\r\n");
