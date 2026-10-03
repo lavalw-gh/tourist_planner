@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Tourist Path Planner 1.5</title>
+<title>Tourist Path Planner 1.6</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
@@ -736,7 +736,7 @@ body.map-fullscreen { overflow: hidden; }
   <section class="panel left">
     <header class="hero">
       <div>
-        <h1>Tourist Path Planner 1.5</h1>
+        <h1>Tourist Path Planner 1.6</h1>
         <div class="intro muted">Build a sightseeing itinerary, compare driving and walking times, and see the driving route on the map.</div>
       </div>
       <button class="theme-button" id="theme-button" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
@@ -849,6 +849,9 @@ body.map-fullscreen { overflow: hidden; }
 <script>
 "use strict";
 
+// Version 1.6 changes:
+// - Prefix custom save/export filenames with Tourist-Planner- exactly once.
+//
 // Version 1.5 changes:
 // - CSV exports use the Save filename value when present.
 // - Added an address-only Google Maps CSV export with city and postcode metadata.
@@ -1704,11 +1707,19 @@ function compactFilenameDate() {
   return `${year}${month}${day}`;
 }
 
-function saveFilenameBase() {
+function customSaveFilename() {
   const customName = document.getElementById("save-filename").value.trim();
   if (!customName) return "";
   const filenameOnly = customName.split(/[\\/]/).at(-1).trim();
-  return filenameOnly.replace(/\.[^.]+$/, "").trim();
+  if (!filenameOnly) return "";
+  // Version 1.6: loaded filenames may already carry the prefix.
+  return /^Tourist-Planner-/i.test(filenameOnly)
+    ? filenameOnly
+    : `Tourist-Planner-${filenameOnly}`;
+}
+
+function saveFilenameBase() {
+  return customSaveFilename().replace(/\.[^.]+$/, "").trim();
 }
 
 function summaryCsvFilename() {
@@ -1722,7 +1733,7 @@ function googleMapsCsvFilename() {
 }
 
 function routeSaveFilename() {
-  const customName = document.getElementById("save-filename").value.trim();
+  const customName = customSaveFilename();
   if (!customName) return `path-planner-route-${filenameTimestamp()}.json`;
   return /\.json$/i.test(customName) ? customName : `${customName}.json`;
 }
