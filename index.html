@@ -330,6 +330,7 @@ h1 {
   border-radius: 14px;
   background: var(--surface);
 }
+.summary-shell[hidden] { display: none; }
 .summary-table {
   width: 100%;
   min-width: 570px;
@@ -779,13 +780,11 @@ body.map-fullscreen { overflow: hidden; }
         </label>
         <span class="status" id="status" role="status" aria-live="polite">Ready</span>
       </div>
-      <div class="summary-shell" id="summary-output">
-        <div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>
-      </div>
+      <div class="summary-shell" id="summary-output" hidden></div>
     </section>
     <section class="section-card" aria-labelledby="comments-heading">
       <h2 class="section-heading" id="comments-heading">Comments</h2>
-      <textarea class="comments-input" id="route-comments" rows="5" aria-labelledby="comments-heading"></textarea>
+      <textarea class="comments-input" id="route-comments" rows="10" aria-labelledby="comments-heading"></textarea>
     </section>
   </section>
 
@@ -867,8 +866,9 @@ body.map-fullscreen { overflow: hidden; }
 "use strict";
 
 // Version 1.7 changes:
-// - Added a five-line Comments box below Summary, with scrolling for longer notes.
+// - Added a Comments box below Summary, with scrolling for longer notes.
 // - Save comments in route JSON; older files without comments load with an empty box.
+// - Layout refinement: remove the empty summary placeholder and expand Comments to ten lines.
 //
 // Version 1.6 changes:
 // - Prefix custom save/export filenames with Tourist-Planner- exactly once.
@@ -1631,8 +1631,10 @@ async function generateSummary() {
 }
 
 function renderSummary() {
+  // Keep Summary compact until an itinerary is available; show the table when generated or loaded.
+  summaryOutput.hidden = !app.legs.length;
   if (!app.legs.length) {
-    summaryOutput.innerHTML = '<div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>';
+    summaryOutput.innerHTML = "";
     return;
   }
   const routeRows = routingRows();
