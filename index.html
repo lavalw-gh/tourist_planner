@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="referrer" content="strict-origin-when-cross-origin">
-<title>Tourist Path Planner 1.6</title>
+<title>Tourist Path Planner 1.7</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;family=Manrope:wght@600;700&amp;display=swap" rel="stylesheet">
@@ -310,6 +310,19 @@ h1 {
 .status.error {
   color: var(--error);
   background: color-mix(in srgb, var(--error) 13%, var(--surface));
+}
+.comments-input {
+  display: block;
+  width: 100%;
+  padding: .65rem .75rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  line-height: 1.5;
+  resize: none;
+  overflow-y: auto;
 }
 .summary-shell {
   overflow: auto;
@@ -736,7 +749,7 @@ body.map-fullscreen { overflow: hidden; }
   <section class="panel left">
     <header class="hero">
       <div>
-        <h1>Tourist Path Planner 1.6</h1>
+        <h1>Tourist Path Planner 1.7</h1>
         <div class="intro muted">Build a sightseeing itinerary, compare driving and walking times, and see the driving route on the map.</div>
       </div>
       <button class="theme-button" id="theme-button" type="button" aria-label="Toggle colour theme" title="Toggle colour theme">◐</button>
@@ -769,6 +782,10 @@ body.map-fullscreen { overflow: hidden; }
       <div class="summary-shell" id="summary-output">
         <div class="empty-state">Add and confirm at least two addresses, then generate your itinerary.</div>
       </div>
+    </section>
+    <section class="section-card" aria-labelledby="comments-heading">
+      <h2 class="section-heading" id="comments-heading">Comments</h2>
+      <textarea class="comments-input" id="route-comments" rows="5" aria-labelledby="comments-heading"></textarea>
     </section>
   </section>
 
@@ -849,6 +866,10 @@ body.map-fullscreen { overflow: hidden; }
 <script>
 "use strict";
 
+// Version 1.7 changes:
+// - Added a five-line Comments box below Summary, with scrolling for longer notes.
+// - Save comments in route JSON; older files without comments load with an empty box.
+//
 // Version 1.6 changes:
 // - Prefix custom save/export filenames with Tourist-Planner- exactly once.
 //
@@ -1744,6 +1765,7 @@ function saveRoute() {
     format: "path-planner-route",
     version: 4,
     savedAt: new Date().toISOString(),
+    comments: document.getElementById("route-comments").value,
     settings: {
       plotDriving: document.getElementById("plot-driving-route").checked,
       plotWalking: document.getElementById("plot-walking-route").checked,
@@ -1772,6 +1794,8 @@ function loadRouteFile(file) {
       const data = JSON.parse(reader.result);
       if (!data || !Array.isArray(data.rows)) throw new Error("Invalid Path Planner route file");
       document.getElementById("save-filename").value = file.name;
+      // Version 1.7: absence of comments in older JSON files resets any previous notes.
+      document.getElementById("route-comments").value = typeof data.comments === "string" ? data.comments : "";
       app.rows = data.rows.map(row => createRow(row));
       if (!app.rows.length) app.rows = [createRow(), createRow()];
       app.legs = Array.isArray(data.legs)
